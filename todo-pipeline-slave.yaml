@@ -1,0 +1,35 @@
+node('node1') {
+    stage('download code') {
+        git credentialsId: 'git', url: 'https://github.com/jeromeoooo/todorest.git'
+    }
+    stage('compile the code') {
+        sh 'mvn compile'
+    }
+    stage('sonar analysis') {
+        sh 'mvn sonar:sonar -Dsonar.projectKey=cloudenabled -Dsonar.host.url=http://44.202.206.57:9000 -Dsonar.login=cd4cdc3b586e8777ad0b4e70102f4f5197e9385b'
+    }
+    stage('test') {
+        sh 'mvn test'
+    }
+    stage('report') {
+        sh 'mvn surefire-report:report'
+    }
+    stage('package') {
+        sh 'mvn package'
+    }
+    stage('deploy jar') {
+        sh 'nohup java -jar target/todorest-0.0.1-SNAPSHOT.jar /tmp 2>> /dev/null >> /dev/null &'
+    }
+    stage('sleep 30s') {
+        sleep 30
+    }
+    stage('check for running app') {
+        sh 'curl http://localhost:8080'
+    }
+    stage('archive jar on jenskins') {
+        archiveArtifacts artifacts: 'target/todorest-0.0.1-SNAPSHOT.jar', followSymlinks: false
+    }
+    stage('upload jar file to nexus') {
+        sh 'curl -v -u admin:CloudEnabled --upload-file target/todorest-0.0.1-SNAPSHOT.jar http://98.81.50.171:8081/repository/maven-releases/todorest-jerome-$BUILD_NUMBER.jar '
+    }
+}
