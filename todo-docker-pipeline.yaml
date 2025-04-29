@@ -1,0 +1,66 @@
+node {
+    stage('variables') {
+        sh '''echo "BUILD_NUMBER" :: $BUILD_NUMBER
+        echo "BUILD_ID" :: $BUILD_ID
+        echo "BUILD_DISPLAY_NAME" :: $BUILD_DISPLAY_NAME
+        echo "JOB_NAME" :: $JOB_NAME
+        echo "JOB_BASE_NAME" :: $JOB_BASE_NAME
+        echo "BUILD_TAG" :: $BUILD_TAG
+        echo "EXECUTOR_NUMBER" :: $EXECUTOR_NUMBER
+        echo "NODE_NAME" :: $NODE_NAME
+        echo "NODE_LABELS" :: $NODE_LABELS
+        echo "WORKSPACE" :: $WORKSPACE
+        echo "JENKINS_HOME" :: $JENKINS_HOME
+        echo "JENKINS_URL" :: $JENKINS_URL
+        echo "BUILD_URL" ::$BUILD_URL
+        echo "JOB_URL" :: $JOB_URL'''
+    }
+    stage('download code') {
+        git credentialsId: 'git', url: 'https://github.com/jeromeoooo/todorest.git'
+    }
+    stage('compile the code') {
+        sh 'mvn compile'
+    }
+    stage('sonar analysis') {
+        sh 'mvn sonar:sonar -Dsonar.projectKey=cloudenabled -Dsonar.host.url=http://44.202.206.57:9000 -Dsonar.login=cd4cdc3b586e8777ad0b4e70102f4f5197e9385b'
+    }
+    stage('test') {
+        sh 'mvn test'
+    }
+    stage('report') {
+        sh 'mvn surefire-report:report'
+    }
+    stage('package') {
+        sh 'mvn package'
+    }
+    stage('build docker image') {
+        sh 'sudo docker buildx build -t jeromeoo/todo:$BUILD_NUMBER.0 .'
+    }
+    stage('docker login') {
+        sh 'sudo docker login -u jeromeoo -p hi7nPXmy_:8Ux5V'
+    }
+    stage('upload to docker hub') {
+        sh 'sudo docker push jeromeoo/todo:$BUILD_NUMBER.0'
+    }
+    stage('delete container') {
+        sh 'sudo docker rm -f t1'
+    }
+    stage('create container') {
+        sh 'sudo docker run -d --name t1 -p 5001:8080 jeromeoo/todo:$BUILD_NUMBER.0'
+    }
+    stage('deploy jar') {
+        sh 'nohup java -jar target/todorest-0.0.1-SNAPSHOT.jar /tmp 2>> /dev/null >> /dev/null &'
+    }
+    stage('sleep 30s') {
+        sleep 30
+    }
+    stage('check for running app') {
+        sh 'curl http://localhost:5001'
+    }
+    stage('archive jar on jenskins') {
+        archiveArtifacts artifacts: 'target/todorest-0.0.1-SNAPSHOT.jar', followSymlinks: false
+    }
+    stage('upload jar file to nexus') {
+        sh 'curl -v -u admin:CloudEnabled --upload-file target/todorest-0.0.1-SNAPSHOT.jar http://98.81.50.171:8081/repository/maven-releases/todorest-jerome-$BUILD_NUMBER.jar '
+    }
+}
